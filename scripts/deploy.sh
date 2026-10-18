@@ -11,10 +11,11 @@ COMPUTE_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 echo "==> Project $PROJECT_ID, region $REGION, bucket gs://$BUCKET, dataset $DATASET"
 
 echo "==> Enabling APIs (first run takes a minute)"
+# compute.googleapis.com creates the default service account the functions run as
 gcloud services enable \
-  cloudfunctions.googleapis.com run.googleapis.com cloudbuild.googleapis.com \
-  artifactregistry.googleapis.com eventarc.googleapis.com pubsub.googleapis.com \
-  storage.googleapis.com bigquery.googleapis.com logging.googleapis.com
+  compute.googleapis.com cloudfunctions.googleapis.com run.googleapis.com \
+  cloudbuild.googleapis.com artifactregistry.googleapis.com eventarc.googleapis.com \
+  pubsub.googleapis.com storage.googleapis.com bigquery.googleapis.com logging.googleapis.com
 
 echo "==> Creating bucket"
 if ! gcloud storage buckets describe "gs://$BUCKET" >/dev/null 2>&1; then
@@ -40,7 +41,8 @@ grant_project_role "$COMPUTE_SA" roles/cloudbuild.builds.builder
 gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" \
   --member="serviceAccount:$COMPUTE_SA" --role=roles/storage.objectAdmin >/dev/null
 # Cloud Storage publishes upload events through Pub/Sub using its own service agent
-GCS_SA=$(gcloud storage service-agent --project="$PROJECT_ID")
+GCS_SA=$(gcloud storage service-agent --project="$PROJECT_ID" 2>/dev/null \
+  || echo "service-${PROJECT_NUMBER}@gs-project-accounts.iam.gserviceaccount.com")
 grant_project_role "$GCS_SA" roles/pubsub.publisher
 
 echo "==> Deploying function $FUNCTION_NAME (takes 2 to 4 minutes)"
