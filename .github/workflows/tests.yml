@@ -1,0 +1,39 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Lint with flake8
+        run: flake8 main.py etl tests --max-line-length 100
+
+      - name: Run tests
+        run: pytest -v
+
+      - name: Check that the function entry point imports
+        run: python -c "import main; print(f'{len(main.TABLE_LIST)} tables configured')"
+
+      - name: Check shell script syntax
+        run: bash -n scripts/*.sh
