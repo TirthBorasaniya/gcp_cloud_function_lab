@@ -4,7 +4,7 @@ Author: Tirth Borasaniya, IE-7374 MLOps
 
 Based on `Labs/GCP_Labs/CloudFunction_Labs/Lab1-CloudFunction_Setup` from the IE-7374 MLOps course repository. The original lab has two parts: an ETL Cloud Function that loads files uploaded to Cloud Storage into BigQuery, and an ML example, an HTTP Cloud Function that serves Iris predictions. This version keeps both. The ETL pipeline uses a different dataset and adds validation, transformation, logging, and duplicate protection. The ML example is fixed so it deploys on Python 3.11, and is hardened.
 
-**Contents:** [How it works](#how-it-works) · [Summary of changes](#summary-of-changes) · [Changes to the core concept](#changes-to-the-core-concept) · [Prerequisites](#prerequisites) · [Running the lab on GCP](#running-the-lab-on-gcp) · [What a successful run looks like](#what-a-successful-run-looks-like) · [Troubleshooting](#troubleshooting) · [Results](#results) · [Running the tests locally](#running-the-tests-locally)
+**Contents:** [How it works](#how-it-works) · [Summary of changes](#summary-of-changes) · [Changes to the core concept](#changes-to-the-core-concept) · [Prerequisites](#prerequisites) · [Running the lab on GCP](#running-the-lab-on-gcp) · [What a successful run looks like](#what-a-successful-run-looks-like) · [Troubleshooting](#troubleshooting) · [Live endpoint](#live-endpoint) · [Results](#results) · [Running the tests locally](#running-the-tests-locally)
 
 ## How it works
 
@@ -300,6 +300,32 @@ Confidence values may differ slightly between library versions; the predicted la
 | `run_demo.sh` tables are empty or missing | The first run includes a cold start. Wait a minute and run `./scripts/run_demo.sh` again; files already loaded are reported as duplicates rather than loaded twice. |
 | `deploy_ml.sh` fails on `--allow-unauthenticated` | Accounts managed by an organization can block public functions. Use a personal Google account and project. |
 | Function errors | Open **Cloud Run functions** in the Console, select the function, and check the **Logs** tab. |
+
+## Live endpoint
+
+The ML example from this submission is deployed and can be tested directly while the lab is being graded:
+
+```
+https://ml-model-function-sgg35pboxq-uc.a.run.app
+```
+
+It accepts POST requests with JSON; opening it in a browser sends a GET request and returns `{"error": "use POST"}`, which is expected. To get a prediction, run this in any terminal (macOS, Linux, Windows PowerShell 7, or Git Bash):
+
+```bash
+curl -X POST https://ml-model-function-sgg35pboxq-uc.a.run.app \
+  -H "Content-Type: application/json" \
+  -d '{"features": [5.1, 3.5, 1.4, 0.2]}'
+```
+
+Expected response: `"predicted_label":"setosa"`. Other inputs to try:
+
+| Request body | Expected result |
+| --- | --- |
+| `{"features": [6.7, 3.0, 5.2, 2.3]}` | `virginica` |
+| `{"instances": [[5.1, 3.5, 1.4, 0.2], [6.0, 2.9, 4.5, 1.5]]}` | `setosa` and `versicolor` |
+| `{"features": ["5.1", 3.5, 1.4, 0.2]}` | HTTP 400 with a validation error |
+
+The ETL function cannot be tested from a link, since it only runs when a file is uploaded to the project's private bucket; the screenshots below show its runs. The endpoint will be removed with `teardown.sh` after grading, after which the screenshots remain as the record of the run.
 
 ## Results
 
