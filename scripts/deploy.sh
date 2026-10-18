@@ -32,6 +32,18 @@ grant_project_role() {
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:$1" --role="$2" --condition=None --quiet >/dev/null
 }
+# newly created service agents can take a few minutes before IAM recognizes them
+grant_with_retry() {
+  local attempt
+  for attempt in 1 2 3 4 5 6; do
+    if grant_project_role "$1" "$2" 2>/dev/null; then
+      return 0
+    fi
+    echo "    $1 not ready yet, retrying in 30s (attempt $attempt of 6)"
+    sleep 30
+  done
+  grant_project_role "$1" "$2"
+}
 # least-privilege roles instead of the original lab's BigQuery Admin
 grant_project_role "$COMPUTE_SA" roles/bigquery.dataEditor
 grant_project_role "$COMPUTE_SA" roles/bigquery.jobUser
@@ -43,7 +55,14 @@ gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" \
 # Cloud Storage publishes upload events through Pub/Sub using its own service agent
 GCS_SA=$(gcloud storage service-agent --project="$PROJECT_ID" 2>/dev/null \
   || echo "service-${PROJECT_NUMBER}@gs-project-accounts.iam.gserviceaccount.com")
-grant_project_role "$GCS_SA" roles/pubsub.publisher
+# the command pads its output with spaces, which IAM would treat as part of the name
+GCS_SA=$(echo "$GCS_SA" | tr -d "[:space:]")
+grant_with_retry "$GCS_SA" roles/pubsub.publisher
+# Eventarc's service agent checks the bucket when the storage trigger is created
+gcloud beta services identity create --service=eventarc.googleapis.com \
+  --project="$PROJECT_ID" --quiet >/dev/null
+EVENTARC_SA="service-${PROJECT_NUMBER}@gcp-sa-eventarc.iam.gserviceaccount.com"
+grant_with_retry "$EVENTARC_SA" roles/eventarc.serviceAgent
 
 echo "==> Deploying function $FUNCTION_NAME (takes 2 to 4 minutes)"
 gcloud functions deploy "$FUNCTION_NAME" \

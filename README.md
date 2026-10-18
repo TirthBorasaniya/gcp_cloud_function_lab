@@ -293,7 +293,8 @@ Confidence values may differ slightly between library versions; the predicted la
 | Problem | Cause and fix |
 | --- | --- |
 | `No GCP project selected` | Run `gcloud config set project YOUR_PROJECT_ID`. |
-| Permission, "service agent", or "service account does not exist" errors during `deploy.sh` | Newly enabled APIs and new roles take one to two minutes to apply. Wait, then run `./scripts/deploy.sh` again. |
+| Permission, "service agent", or "service account does not exist" errors during `deploy.sh` | Newly enabled APIs, service agents, and roles take a few minutes to apply. The script retries for up to three minutes; if it still fails, wait and run `./scripts/deploy.sh` again. |
+| `storage.buckets.get` denied, or "Eventarc service account" in a deploy error | Eventarc's service agent is still being set up on a new project. Wait three minutes and run `./scripts/deploy.sh` again. |
 | `Permission denied` when running a script | Run `chmod +x scripts/*.sh` once, then try again. |
 | `Billing account ... not found` or APIs fail to enable | Billing is not linked to the project. Link it under **Billing** in the Console. |
 | `run_demo.sh` tables are empty or missing | The first run includes a cold start. Wait a minute and run `./scripts/run_demo.sh` again; files already loaded are reported as duplicates rather than loaded twice. |
