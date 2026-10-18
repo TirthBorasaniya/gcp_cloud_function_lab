@@ -2,7 +2,7 @@
 
 Author: Tirth Borasaniya, IE-7374 MLOps
 
-Based on `Labs/GCP_Labs/CloudFunction_Labs/Lab1-CloudFunction_Setup` from the IE-7374 MLOps course repository. The original lab builds a Cloud Function that runs when a file is uploaded to a Cloud Storage bucket and loads the file into BigQuery. This version keeps that purpose and pipeline, uses a different dataset, and adds validation, transformation, logging, and duplicate protection.
+Based on `Labs/GCP_Labs/CloudFunction_Labs/Lab1-CloudFunction_Setup` from the IE-7374 MLOps course repository. The original lab has two parts: an ETL Cloud Function that loads files uploaded to Cloud Storage into BigQuery, and an ML example, an HTTP Cloud Function that serves Iris predictions. This version keeps both. The ETL pipeline uses a different dataset and adds validation, transformation, logging, and duplicate protection. The ML example is fixed so it deploys on Python 3.11, and is hardened.
 
 ## How it works
 
@@ -32,7 +32,8 @@ flowchart LR
 | Monitoring | Print statements only | `ingestion_log` table in BigQuery recording the outcome of every file |
 | Duplicates | Re-uploading a file loads it again | Identical content is detected and skipped |
 | Setup | Manual steps in the Cloud Console | `deploy.sh`, `run_demo.sh`, and `teardown.sh` scripts |
-| Tests | None | 90 unit and pipeline tests that run without GCP, plus a GitHub Actions workflow |
+| ML example | Cannot deploy on Python 3.11; accepts invalid input; leaks internal errors | Deploys on Python 3.11, strict validation, batch predictions, readable labels |
+| Tests | None | 107 tests that run without GCP, plus a GitHub Actions workflow |
 | Permissions | BigQuery Admin | Least-privilege roles (BigQuery Data Editor and Job User) |
 
 ## Modifications
@@ -80,7 +81,39 @@ Every file, whatever happens to it, gets one row in the `ingestion_log` table wi
 ### 5. Duplicate protection (`etl/pipeline.py`)
 The function computes an MD5 hash of each file's content and checks the ingestion log before loading. If identical content was already loaded into the same table, even under a different file name, the file is skipped and logged as `SKIPPED_DUPLICATE`. A quarantined file that is fixed and re-uploaded has different content, so it loads normally.
 
-## Bugs fixed from the original lab
+## ML example: HTTP prediction function (`ML-Example/`)
+
+The second part of the original lab, kept and fixed. It is a separate HTTP Cloud Function that predicts the Iris species from four flower measurements.
+
+| Problem in the original | Fix |
+| --- | --- |
+| Pins `numpy 1.21`, `scikit-learn 0.24.2`, and `Flask 2.0.3`, which do not install on Python 3.11, the runtime the lab specifies, so the function cannot deploy | Dependencies updated to versions that support Python 3.11; Flask comes with `functions-framework` |
+| Input check accepts `NaN`, infinity, booleans, and numeric strings such as `"5.1"` | Only finite numbers are accepted |
+| Every error returns Python's internal error message to the caller | Clear 400 messages for bad input; unexpected errors are logged by the platform instead of exposed |
+| Accepts any HTTP method | Only POST is allowed (405 otherwise) |
+| Saves the model to `/tmp` and reloads it from disk on every request | Trained once when the instance starts and kept in memory |
+| Returns only a class number and an unlabeled nested list of probabilities | Returns the species name and confidences keyed by species |
+| One flower per request | Optional batch of up to 100 flowers with `"instances"` |
+| Entry point named `logfunction` | Renamed to `predict` |
+
+Request and response:
+
+```bash
+curl -X POST "$URL" -H "Content-Type: application/json" \
+  -d '{"features": [5.1, 3.5, 1.4, 0.2]}'
+```
+
+```json
+{
+  "predicted_class": 0,
+  "predicted_label": "setosa",
+  "confidences": {"setosa": 0.9847, "versicolor": 0.0153, "virginica": 0.0}
+}
+```
+
+A batch request sends `{"instances": [[...], [...]]}` and returns `{"predictions": [...]}`.
+
+## Bugs fixed in the ETL function
 
 | Problem in the original | Fix |
 | --- | --- |
@@ -101,6 +134,9 @@ The function computes an MD5 hash of each file's content and checks the ingestio
 .
 ├── .github/workflows/tests.yml   # runs lint and tests on every push
 ├── docs/screenshots/              # evidence that the pipeline ran on GCP
+├── ML-Example/
+│   ├── main.py                    # HTTP prediction function: predict
+│   └── requirements.txt
 ├── etl/
 │   ├── config.py                  # loads and validates schemas.yaml, matches files to tables
 │   ├── errors.py                  # exception types
@@ -114,8 +150,10 @@ The function computes an MD5 hash of each file's content and checks the ingestio
 │   └── orders_2026-10-02_bad.json # contains six deliberate errors
 ├── scripts/
 │   ├── config.sh                  # shared settings
-│   ├── deploy.sh                  # creates resources and deploys the function
+│   ├── deploy.sh                  # creates resources and deploys the ETL function
+│   ├── deploy_ml.sh               # deploys the ML example
 │   ├── run_demo.sh                # uploads sample files and shows results
+│   ├── run_ml_demo.sh             # sends test requests to the ML example
 │   └── teardown.sh                # deletes everything
 ├── tests/
 ├── main.py                        # Cloud Function entry point: process_upload
@@ -135,7 +173,12 @@ gcloud config set project YOUR_PROJECT_ID
 
 ./scripts/deploy.sh      # enables APIs, creates the bucket and dataset, grants roles, deploys
 ./scripts/run_demo.sh    # uploads the sample files and prints the results
+
+./scripts/deploy_ml.sh   # deploys the ML example as a public HTTP function
+./scripts/run_ml_demo.sh # sends a single, a batch, and an invalid request
 ```
+
+The ML example is deployed with `--allow-unauthenticated`, as in the original lab, so anyone with the URL can call it. `--max-instances=2` limits the cost of unwanted traffic, and `teardown.sh` removes it.
 
 `deploy.sh` can be run again safely. Right after granting roles, Google Cloud can take a minute or two to apply them; if the first deployment fails with a permission error, wait and run it again.
 
@@ -157,23 +200,25 @@ Screenshots from the deployed pipeline:
 3. `orders` table in BigQuery with nested items and audit columns: `docs/screenshots/03_orders_table.png`
 4. `ingestion_log` query results: `docs/screenshots/04_ingestion_log.png`
 5. Quarantine folder in the bucket with the error report: `docs/screenshots/05_quarantine.png`
+6. ML example responding to requests: `docs/screenshots/06_ml_prediction.png`
 
 ![Deployed function](docs/screenshots/01_function.png)
 ![Function logs](docs/screenshots/02_logs.png)
 ![Orders table](docs/screenshots/03_orders_table.png)
 ![Ingestion log](docs/screenshots/04_ingestion_log.png)
 ![Quarantine folder](docs/screenshots/05_quarantine.png)
+![ML example responses](docs/screenshots/06_ml_prediction.png)
 
 ## Running the tests locally
 
-The tests use in-memory stand-ins for Cloud Storage and BigQuery, so they need no GCP account.
+The ETL tests use in-memory stand-ins for Cloud Storage and BigQuery, and the ML tests call the function through Flask test requests, so no GCP account is needed.
 
 ```bash
 python -m venv cf_lab_env
 source cf_lab_env/bin/activate      # Windows: cf_lab_env\Scripts\activate
 pip install -r requirements-dev.txt
 pytest
-flake8 main.py etl tests --max-line-length 100
+flake8 main.py etl tests ML-Example --max-line-length 100
 ```
 
 ## Cost and cleanup
@@ -184,4 +229,4 @@ At this scale the function, bucket, and BigQuery usage stay within Google Cloud'
 ./scripts/teardown.sh
 ```
 
-This deletes the function, the bucket and its files, the dataset, and the stored container images.
+This deletes both functions, the bucket and its files, the dataset, and the stored container images.
