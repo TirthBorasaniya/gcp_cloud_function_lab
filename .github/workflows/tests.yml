@@ -27,7 +27,7 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Lint with flake8
-        run: flake8 main.py etl tests --max-line-length 100
+        run: flake8 main.py etl tests ML-Example --max-line-length 100
 
       - name: Run tests
         run: pytest -v

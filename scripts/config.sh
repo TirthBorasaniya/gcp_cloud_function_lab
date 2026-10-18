@@ -7,6 +7,7 @@ BUCKET="${BUCKET:-${PROJECT_ID}-etl-uploads}"
 DATASET="${DATASET:-ecommerce}"
 BQ_LOCATION="${BQ_LOCATION:-US}"
 FUNCTION_NAME="${FUNCTION_NAME:-etl-loader}"
+ML_FUNCTION_NAME="${ML_FUNCTION_NAME:-ml-model-function}"
 
 if [[ -z "$PROJECT_ID" ]]; then
   echo "No GCP project selected. Run: gcloud config set project YOUR_PROJECT_ID" >&2
