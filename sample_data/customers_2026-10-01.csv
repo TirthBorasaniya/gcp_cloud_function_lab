@@ -1,0 +1,5 @@
+customer_id,name,email,signup_date,is_member,country
+CUST-001,Avery Chen,avery@example.com,2025-03-14,true,US
+CUST-002,Jordan Patel,,2025-07-02,false,US
+CUST-003,Sam Rivera,sam@example.com,2026-01-20,true,US
+CUST-004,Riley Okafor,riley@example.com,2026-09-30,false,CA

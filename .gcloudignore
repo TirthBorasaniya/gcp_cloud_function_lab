@@ -1,0 +1,16 @@
+# files excluded from the Cloud Function upload
+.gcloudignore
+.git/
+.gitignore
+.github/
+__pycache__/
+*.pyc
+.pytest_cache/
+tests/
+sample_data/
+scripts/
+docs/
+README.md
+requirements-dev.txt
+venv/
+cf_lab_env/
